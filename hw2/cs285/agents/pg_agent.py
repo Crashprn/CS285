@@ -1,8 +1,11 @@
 import numpy as np
+import functools
+import itertools
 
 from .base_agent import BaseAgent
 from cs285.policies.MLP_policy import MLPPolicyPG
 from cs285.infrastructure.replay_buffer import ReplayBuffer
+from cs285.infrastructure.utils import normalize
 
 
 class PGAgent(BaseAgent):
@@ -42,6 +45,9 @@ class PGAgent(BaseAgent):
         # TODO: update the PG actor/policy using the given batch of data 
         # using helper functions to compute qvals and advantages, and
         # return the train_log obtained from updating the policy
+        q_values = self.calculate_q_vals(rewards_list)
+        advantages = self.estimate_advantage(observations, rewards_list, q_values, terminals)
+        train_log = self.actor.update(observations, actions, advantages, q_values)
 
         return train_log
 
@@ -69,12 +75,12 @@ class PGAgent(BaseAgent):
         # then flattened to a 1D numpy array.
 
         if not self.reward_to_go:
-            TODO
+            q_values = np.concatenate([self._discounted_return(rews) for rews in rewards_list])
 
         # Case 2: reward-to-go PG
         # Estimate Q^{pi}(s_t, a_t) by the discounted sum of rewards starting from t
         else:
-            TODO
+            q_values = np.concatenate([self._discounted_cumsum(rews) for rews in rewards_list])
 
         return q_values
 
@@ -94,7 +100,7 @@ class PGAgent(BaseAgent):
             ## TODO: values were trained with standardized q_values, so ensure
                 ## that the predictions have the same mean and standard deviation as
                 ## the current batch of q_values
-            values = TODO
+            values = values_unnormalized * q_values.std() + q_values.mean()
 
             if self.gae_lambda is not None:
                 ## append a dummy T+1 value for simpler recursive calculation
@@ -114,13 +120,18 @@ class PGAgent(BaseAgent):
                     ## HINT: use terminals to handle edge cases. terminals[i]
                         ## is 1 if the state is the last in its trajectory, and
                         ## 0 otherwise.
+                    next_val = values[i+1] if not terminals[i] else 0
+                    next_adv = advantages[i+1] if not terminals[i] else 0
+
+                    delta = rews[i] + self.gamma * next_val - values[i]
+                    advantages[i] = delta + self.gamma * self.gae_lambda * next_adv
 
                 # remove dummy advantage
                 advantages = advantages[:-1]
 
             else:
                 ## TODO: compute advantage estimates using q_values, and values as baselines
-                advantages = TODO
+                advantages = q_values - values
 
         # Else, just set the advantage to [Q]
         else:
@@ -129,7 +140,7 @@ class PGAgent(BaseAgent):
         # Normalize the resulting advantages to have a mean of zero
         # and a standard deviation of one
         if self.standardize_advantages:
-            advantages = TODO
+            advantages = normalize(advantages, advantages.mean(), advantages.std())
 
         return advantages
 
@@ -154,6 +165,8 @@ class PGAgent(BaseAgent):
 
             Output: list where each index t contains sum_{t'=0}^T gamma^t' r_{t'}
         """
+        reward = functools.reduce(lambda res, new : res * self.gamma + new, reversed(rewards))
+        list_of_discounted_returns = [reward] * len(rewards)
 
         return list_of_discounted_returns
 
@@ -164,4 +177,4 @@ class PGAgent(BaseAgent):
             -and returns a list where the entry in each index t' is sum_{t'=t}^T gamma^(t'-t) * r_{t'}
         """
 
-        return list_of_discounted_cumsums
+        return reversed(list(itertools.accumulate(reversed(rewards), lambda res, new : res * self.gamma + new)))

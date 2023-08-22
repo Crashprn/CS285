@@ -81,8 +81,8 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             observation = obs[None]
 
         # TODO return the action that the policy prescribes
-        raise NotImplementedError
-
+        obs = ptu.from_numpy(obs)
+        return ptu.to_numpy(self.forward(obs).sample())
     # update/train this policy
     def update(self, observations, actions, **kwargs):
         raise NotImplementedError
@@ -92,9 +92,15 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     # through it. For example, you can return a torch.FloatTensor. You can also
     # return more flexible objects, such as a
     # `torch.distributions.Distribution` object. It's up to you!
-    def forward(self, observation: torch.FloatTensor) -> Any:
-        raise NotImplementedError
-
+    def forward(self, observation: torch.FloatTensor) -> distributions.Distribution:
+        if self.discrete:
+            return distributions.Categorical(logits=self.logits_na(observation))
+        else:
+            batch_mean = self.mean_net(observation)
+            scale_tril = torch.diag(self.logstd.exp())
+            batch_dim = batch_mean.shape[0]
+            batch_scale_tril = scale_tril.repeat(batch_dim, 1, 1)
+            return distributions.MultivariateNormal(batch_mean, scale_tril=batch_scale_tril)
 
 #####################################################
 #####################################################
@@ -108,8 +114,15 @@ class MLPPolicySL(MLPPolicy):
             self, observations, actions,
             adv_n=None, acs_labels_na=None, qvals=None
     ):
-        # TODO: update the policy and return the loss
-        loss = TODO
+        obs = ptu.from_numpy(observations)
+        ac = ptu.from_numpy(actions)
+        action_distribution = self(obs)
+        loss = -action_distribution.log_prob(ac).mean()
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
         return {
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),
