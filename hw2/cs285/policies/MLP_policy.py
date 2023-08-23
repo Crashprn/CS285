@@ -93,9 +93,9 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         else:
           observation = obs[None]
         
-        observation_tensor = torch.tensor(observation, dtype=torch.float).to(ptu.device)
+        observation_tensor = ptu.from_numpy(observation)
         action_distribution = self.forward(observation_tensor)
-        return action_distribution.sample().cpu().detach().numpy()
+        return ptu.to_numpy(action_distribution.sample())
 
     # update/train this policy
     def update(self, observations, actions, **kwargs):
