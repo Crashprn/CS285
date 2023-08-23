@@ -72,18 +72,27 @@ class BootstrappedContinuousCritic(nn.Module, BaseCritic):
             returns:
                 training loss
         """
-        # TODO: Implement the pseudocode below: do the following (
         # self.num_grad_steps_per_target_update * self.num_target_updates)
         # times:
-        # every self.num_grad_steps_per_target_update steps (which includes the
-        # first step), recompute the target values by
-        #     a) calculating V(s') by querying the critic with next_ob_no
-        #     b) and computing the target values as r(s, a) + gamma * V(s')
-        # every time, update this critic using the observations and targets
-        #
-        # HINT: don't forget to use terminal_n to cut off the V(s') (ie set it
-        #       to 0) when a terminal state is reached
-        # HINT: make sure to squeeze the output of the critic_network to ensure
-        #       that its dimensions match the reward
+        for _ in range(self.num_grad_steps_per_target_update * self.num_target_updates):
+
+            # every self.num_grad_steps_per_target_update steps (which includes the
+            # first step), recompute the target values by
+            #     a) calculating V(s') by querying the critic with next_ob_no
+            #     b) and computing the target values as r(s, a) + gamma * V(s')
+            if _ % self.num_grad_steps_per_target_update == 0:
+                target_values = reward_n + self.gamma * self.forward_np(next_ob_no).squeeze() * (1 - terminal_n)
+                target_values = ptu.from_numpy(target_values)
+            # every time, update this critic using the observations and targets
+            pred = self(ptu.from_numpy(ob_no)).squeeze()
+
+            loss = self.loss(pred, target_values)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+        
+            # HINT: make sure to squeeze the output of the critic_network to ensure
+            #       that its dimensions match the reward
 
         return loss.item()
