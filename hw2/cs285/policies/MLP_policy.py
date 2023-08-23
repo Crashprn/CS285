@@ -148,6 +148,7 @@ class MLPPolicyPG(MLPPolicy):
 
             
         loss = torch.neg(torch.mean(torch.mul(log_prob, advantages)))
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -157,11 +158,11 @@ class MLPPolicyPG(MLPPolicy):
             ## TODO: update the neural network baseline using the q_values as
             ## targets. The q_values should first be normalized to have a mean
             ## of zero a:nd a standard deviation of one.
-            q_values = ptu.from_numpy(utils.normalize(q_values, np.mean(q_values), np.std(q_values)))
-            baseline_pred = self.baseline(observations)
+            targets = ptu.from_numpy(utils.normalize(q_values, np.mean(q_values), np.std(q_values)))
+            baseline_pred = self.baseline(observations).squeeze()
 
-            assert baseline_pred.shape == q_values.shape
-            base_loss = self.baseline_loss(baseline_pred, q_values)
+            assert baseline_pred.shape == targets.shape
+            base_loss = self.baseline_loss(baseline_pred, targets)
             
             self.baseline_optimizer.zero_grad()
             base_loss.backward()
@@ -188,4 +189,4 @@ class MLPPolicyPG(MLPPolicy):
         """
         observations = ptu.from_numpy(observations)
         pred = self.baseline(observations)
-        return ptu.to_numpy(pred.squeeze())
+        return ptu.to_numpy(pred).squeeze()

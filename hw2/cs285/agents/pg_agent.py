@@ -1,6 +1,7 @@
 import numpy as np
 import functools
 import itertools
+import time
 
 from .base_agent import BaseAgent
 from cs285.policies.MLP_policy import MLPPolicyPG
@@ -176,5 +177,5 @@ class PGAgent(BaseAgent):
             -takes a list of rewards {r_0, r_1, ..., r_t', ... r_T},
             -and returns a list where the entry in each index t' is sum_{t'=t}^T gamma^(t'-t) * r_{t'}
         """
-
-        return reversed(list(itertools.accumulate(reversed(rewards), lambda res, new : res * self.gamma + new)))
+        cum_sum = list(itertools.accumulate(reversed(rewards), lambda res, new : res * self.gamma + new))[::-1]
+        return cum_sum

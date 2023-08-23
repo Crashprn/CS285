@@ -69,7 +69,7 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
             if hasattr(env, 'sim'):
                 image_obs.append(env.sim.render(camera_name='track', height=500, width=500)[::-1])
             else:
-                image_obs.append(env.render())
+                image_obs.append(env.render(mode=render_mode))
 
         # use the most recent ob to decide what to do
         obs.append(ob)
@@ -102,7 +102,7 @@ def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, r
     timesteps_this_batch = 0
     paths = []
     while timesteps_this_batch < min_timesteps_per_batch:
-        paths.append(sample_trajectory(env, policy, max_path_length, render))
+        paths.append(sample_trajectory(env, policy, max_path_length, render, render_mode))
         timesteps_this_batch += paths[-1]['observation'].shape[0]
 
     return paths, timesteps_this_batch
@@ -112,11 +112,9 @@ def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, ren
         Collect ntraj rollouts.
     """
     paths = []
-    env_steps = 0
     for _ in range(ntraj):
-        paths.append(sample_trajectory(env, policy, max_path_length, render))
-        env_steps += get_pathlength(paths[-1])
-    return paths, env_steps
+        paths.append(sample_trajectory(env, policy, max_path_length, render, render_mode))
+    return paths
 
 
 ############################################
