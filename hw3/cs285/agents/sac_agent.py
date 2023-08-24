@@ -7,8 +7,10 @@ from cs285.infrastructure.utils import *
 from cs285.policies.MLP_policy import MLPPolicyAC
 from .base_agent import BaseAgent
 import gym
+import torch
 from cs285.policies.sac_policy import MLPPolicySAC
 from cs285.critics.sac_critic import SACCritic
+from cs285.infrastructure import sac_utils
 import cs285.infrastructure.pytorch_util as ptu
 
 class SACAgent(BaseAgent):
@@ -51,7 +53,30 @@ class SACAgent(BaseAgent):
         # HINT: You need to use the entropy term (alpha)
         # 2. Get current Q estimates and calculate critic loss
         # 3. Optimize the critic  
-        return critic_loss
+        ob_no = ptu.from_numpy(ob_no)
+        ac_na = ptu.from_numpy(ac_na)
+        next_ob_no = ptu.from_numpy(next_ob_no)
+
+        Q_target1, Q_target2 = self.critic_target(next_ob_no, self.actor(next_ob_no))
+        Q_target = torch.min(Q_target1, Q_target2)
+
+        next_ac_dist = self.actor(next_ob_no)
+        next_log_prob = next_ac_dist.log_prob(next_ac_dist.sample())
+
+        targets = re_n + self.gamma * (1 - terminal_n) * (Q_target - self.actor.alpha * next_log_prob)
+
+        Q_1, Q_2 = self.critic(ob_no, ac_na)
+
+        loss1 = self.critic.loss(Q_1, targets)
+        loss2 = self.critic.loss(Q_2, targets)
+
+        self.critic.optimizer.zero_grad()
+        loss1.backward()
+        loss2.backward()
+        self.critic.optimizer.step()
+
+
+        return ptu.to_numpy(loss1), ptu.to_numpy(loss2)
 
     def train(self, ob_no, ac_na, re_n, next_ob_no, terminal_n):
         # TODO 
@@ -67,11 +92,27 @@ class SACAgent(BaseAgent):
         #     update the actor
 
         # 4. gather losses for logging
+
+        for _ in range(self.agent_params['num_critic_updates_per_agent_update']):
+            critic_loss1, critic_loss2 = self.update_critic(ob_no, ac_na, next_ob_no, re_n, terminal_n)
+
+            if _ % self.critic_target_update_frequency == 0:
+                sac_utils.soft_update_params(self.critic, self.critic_target, self.critic_tau)
+            
+        if self.training_step % self.actor_update_frequency == 0:
+            for _ in range(self.agent_params['num_actor_updates_per_agent_update']):
+                actor_loss, alpha_loss, alpha = self.actor.update(ob_no, self.critic)
+        else:
+            actor_loss, alpha_loss, alpha = None, None, None
+        
+        self.training_step += 1
+
+
         loss = OrderedDict()
-        loss['Critic_Loss'] = TODO
-        loss['Actor_Loss'] = TODO
-        loss['Alpha_Loss'] = TODO
-        loss['Temperature'] = TODO
+        loss['Critic_Loss'] = (critic_loss1 + critic_loss2) / 2
+        loss['Actor_Loss'] = actor_loss
+        loss['Alpha_Loss'] = alpha_loss
+        loss['Temperature'] = alpha
 
         return loss
 

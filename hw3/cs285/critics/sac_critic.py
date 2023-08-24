@@ -55,8 +55,11 @@ class SACCritic(nn.Module, BaseCritic):
         )
 
     def forward(self, obs: torch.Tensor, action: torch.Tensor):
-        # TODO: return the two q values
-        return values
+        inputs = torch.stack([obs, action], dim=1)
+        q1 = self.Q1(inputs)
+        q2 = self.Q2(inputs)
+
+        return q1, q2 
 
 
 
