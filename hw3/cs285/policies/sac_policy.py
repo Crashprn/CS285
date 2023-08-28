@@ -88,7 +88,10 @@ class MLPPolicySAC(MLPPolicy):
         actor_loss.backward()
         self.optimizer.step()
 
+        self.log_alpha_optimizer.zero_grad()
+        alpha_loss = torch.nn.MSELoss(self.log_alpha, self.target_entropy)
+        alpha_loss.backward()
         
 
-        return actor_loss, alpha_loss, self.alpha
+        return ptu.to_numpy(actor_loss), ptu.to_numpy(alpha_loss), ptu.to_numpy(self.alpha)
 
